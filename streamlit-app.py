@@ -118,6 +118,12 @@ def bar_chart(df):
         use_container_width=True
     )
 
+# simplify untuk kurangi kompleksitas poligon
+gdf["geometry"] = gdf["geometry"].simplify(tolerance=0.01, preserve_topology=True)
+
+# cache geojson supaya tidak dihitung ulang
+geojson = gdf.__geo_interface__
+
 def map_choropleth(df):
     # Hitung jumlah penjual produk lokal per provinsi
     count = (
@@ -126,7 +132,7 @@ def map_choropleth(df):
         .reset_index(name="count")
     )
 
-    # Gabungkan dengan geojson
+    # Gabungkan dengan shapefile
     merged = gdf.merge(count, left_on="ADM1_EN", right_on="Lokasi", how="left")
     merged["count"] = merged["count"].fillna(0)
     merged["Lokasi"] = merged["Lokasi"].fillna(merged["ADM1_EN"])
@@ -134,8 +140,8 @@ def map_choropleth(df):
     # Buat choropleth
     fig = px.choropleth(
         merged,
-        geojson=merged.__geo_interface__,
-        locations=merged.index,  # gunakan index sebagai id unik
+        geojson=geojson,                # pakai cache geojson
+        locations=merged.index,
         color="count",
         color_continuous_scale=selected_color_theme,
         hover_name="Lokasi",
