@@ -14,7 +14,7 @@ st.set_page_config(
 
 # ---- Load data ----
 df = pd.read_excel('Identifikasi-Brand-E-Commerce.xlsx')
-gdf = gpd.read_file('indonesia_provinsi.geojson')
+gdf = gpd.read_file("idn_adm_bps_20200401_shp/idn_admbnda_adm1_bps_20200401.shp")
 
 # ---- Pre-processing ----
 selected_columns = [
