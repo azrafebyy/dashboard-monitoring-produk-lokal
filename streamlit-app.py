@@ -15,11 +15,58 @@ st.set_page_config(
 # ---- Load data ----
 df = pd.read_excel('Identifikasi-Brand-E-Commerce.xlsx')
 gdf = gpd.read_file("idn_adm_bps_20200401_shp/idn_admbnda_adm1_bps_20200401.shp")
+gdf2 = gpd.read_file("idn_adm_bps_20200401_shp/idn_admbnda_adm2_bps_20200401.shp")
 
 # ---- Pre-processing ----
+# Mengubah lokasi berdasarkan kabupaten/kota ke lokasi berdasarkan provinsi
+def normalize_lokasi(lokasi: str) -> str:
+    lokasi = lokasi.strip()
+
+    # Aturan khusus
+    if lokasi == "Banjarbaru":
+        return "Kota Banjar Baru"
+    if lokasi == "Bekasi Kota":
+        return "Kota Bekasi"
+    if lokasi == "Kota Surakarta (Solo)":
+        return "Kota Surakarta"
+    if lokasi == "Solo":
+        return "Kota Surakarta"
+
+    # Aturan umum
+    if lokasi.startswith("Kab."):
+        lokasi = lokasi.replace("Kab.", "").strip()
+
+    elif lokasi.startswith("Kota "):
+        return lokasi
+
+    elif lokasi.startswith("Jakarta"):
+        return "Kota " + lokasi
+
+    kota_spesial = [
+        "Depok","Medan","Surabaya",
+        "Yogyakarta","Tangerang Selatan","Cimahi",
+        "Pekanbaru","Makassar","Manado",
+        "Denpasar","Palembang","Palu",
+        "Binjai","Salatiga","Banjar"
+    ]
+    if lokasi in kota_spesial:
+        return "Kota " + lokasi
+
+    return lokasi
+
+df["DISTRICT"] = df["LOCATION"].apply(normalize_lokasi)
+
+ref = gdf2[["ADM2_EN", "ADM1_EN"]].drop_duplicates()
+ref = ref.rename(columns={"ADM2_EN": "DISTRICT", "ADM1_EN": "Provinsi"})
+
+df = df.merge(ref, on="DISTRICT", how="left")
+
+df = df.rename(columns={"Provinsi": "PROVINCE"})
+
+# Filter kolom yang digunakan saja
 selected_columns = [
     'PRODUCT LINK', 'TITLE', 'PRICE', 'MARKETPLACE', 'BRAND',
-    'ASAL BRAND', 'Kategori', 'Lokasi'
+    'ASAL BRAND', 'Kategori', 'PROVINCE'
 ]
 
 df = df[selected_columns]
@@ -128,14 +175,14 @@ def map_choropleth(df):
     # Hitung jumlah penjual produk lokal per provinsi
     count = (
         df[df["ASAL BRAND"] == "ID"]
-        .groupby("Lokasi").size()
+        .groupby("PROVINCE").size()
         .reset_index(name="count")
     )
 
     # Gabungkan dengan shapefile
-    merged = gdf.merge(count, left_on="ADM1_EN", right_on="Lokasi", how="left")
+    merged = gdf.merge(count, left_on="ADM1_EN", right_on="PROVINCE", how="left")
     merged["count"] = merged["count"].fillna(0)
-    merged["Lokasi"] = merged["Lokasi"].fillna(merged["ADM1_EN"])
+    merged["PROVINCE"] = merged["PROVINCE"].fillna(merged["ADM1_EN"])
 
     # Buat choropleth
     fig = px.choropleth(
@@ -144,7 +191,7 @@ def map_choropleth(df):
         locations=merged.index,
         color="count",
         color_continuous_scale=selected_color_theme,
-        hover_name="Lokasi",
+        hover_name="PROVINCE",
     )
 
     fig.update_traces(
@@ -166,7 +213,7 @@ def map_choropleth(df):
     points = event["selection"].get("points", [])
     if points:
         provinsi_idx = points[0].get("location")
-        provinsi = merged.loc[provinsi_idx, "Lokasi"]
+        provinsi = merged.loc[provinsi_idx, "PROVINCE"]
     else:
         provinsi = None
 
@@ -174,7 +221,7 @@ def map_choropleth(df):
     if provinsi:
         st.subheader(f"📦 Kategori Produk di {provinsi}")
         kategori_count = (
-            df[(df["ASAL BRAND"] == "ID") & (df["Lokasi"] == provinsi)]
+            df[(df["ASAL BRAND"] == "ID") & (df["PROVINCE"] == provinsi)]
             .groupby("Kategori").size().reset_index(name="Jumlah Produk")
             .sort_values("Jumlah Produk", ascending=False)
         )
