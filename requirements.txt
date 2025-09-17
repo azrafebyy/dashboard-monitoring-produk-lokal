@@ -6,4 +6,4 @@ plotly
 altair
 openpyxl
 os
-locale
+babel
