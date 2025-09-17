@@ -485,10 +485,8 @@ with tab[2]:
             if not df_filtered[df_filtered["ASAL BRAND"] != "ID"].empty else 0
 
         # Format angka jadi Rupiah
-        locale.setlocale(locale.LC_ALL, 'id_ID.UTF-8')
-
         def fmt_rupiah(val):
-            return locale.currency(val, grouping=True).replace(",00", "") if val else "–"
+            return format_currency(val, "IDR", locale="id_ID") if val else "–"
 
         mean_lokal_fmt = fmt_rupiah(mean_lokal)
         mean_impor_fmt = fmt_rupiah(mean_impor)
