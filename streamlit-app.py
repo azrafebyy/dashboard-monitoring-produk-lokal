@@ -5,7 +5,7 @@ import numpy as np
 import geopandas as gpd
 import plotly.express as px
 import altair as alt
-import locale
+from babel.numbers import format_currency
 
 # ---- Page configuration ----
 st.set_page_config(
