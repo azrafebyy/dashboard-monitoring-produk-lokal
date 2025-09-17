@@ -5,3 +5,4 @@ geopandas
 plotly
 altair
 openpyxl
+os
