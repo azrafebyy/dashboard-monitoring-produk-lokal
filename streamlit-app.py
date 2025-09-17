@@ -4,6 +4,8 @@ import pandas as pd
 import geopandas as gpd
 import plotly.express as px
 import altair as alt
+from scipy.stats import gmean
+import locale
 
 # ---- Page configuration ----
 st.set_page_config(
@@ -241,7 +243,7 @@ def grouped_bar_chart(df):
     # Group by kategori & produk
     grouped_price = (
         df_grouped_bar.groupby(['Kategori', 'Produk'])['PRICE']
-        .mean()
+        .agg(gmean)
         .reset_index()
         .rename(columns={'PRICE': 'Mean Price'})
     )
@@ -307,9 +309,9 @@ def boxplot(df, kategori):
 
 # ---- Sidebar ----
 with st.sidebar:
-    st.title('🛍️ Dashboard Monitoring Produk Lokal di Marketplace')
+    st.title('🛍️ Dashboard Monitoring Produk Lokal di Platform')
     st.markdown("""
-    Visualisasi interaktif produk lokal di marketplace Indonesia. 
+    Visualisasi interaktif produk lokal di platform Indonesia. 
     Dashboard ini dirancang untuk memantau tren, distribusi, dan perbandingan produk lokal dengan produk impor sebagai dasar pertimbangan kebijakan strategis.
     """)
 
@@ -353,16 +355,16 @@ with tab[0]:
             """
         )
     
-    st.subheader("🔍 Analisis Produk Lokal Berdasarkan Marketplace")
+    st.subheader("🔍 Analisis Produk Lokal Berdasarkan Platform")
 
     col = st.columns((1.5, 2), gap='medium')
     with col[0]:
         # Filter interaktif
-        marketplace_list = ['Semua Marketplace', 'Blibli', 'Bukalapak', 'OLX']
-        selected_marketplace = st.selectbox('Pilih marketplace', marketplace_list)
+        marketplace_list = ['Semua Platform', 'Blibli', 'Bukalapak', 'OLX']
+        selected_marketplace = st.selectbox('Pilih Platform', marketplace_list)
 
         # Filter dataset
-        if selected_marketplace == "Semua Marketplace":
+        if selected_marketplace == "Semua Platform":
             df_filtered = df
         else:
             df_filtered = df[(df["MARKETPLACE"] == selected_marketplace)]
@@ -388,7 +390,7 @@ with tab[0]:
         
         st.markdown(
             """
-            Bagian ini menampilkan jumlah produk lokal yang tersedia di setiap marketplace. 
+            Bagian ini menampilkan jumlah produk lokal yang tersedia di setiap platform. 
             Informasi ini membantu untuk memahami seberapa besar kontribusi produk lokal dalam platform yang dipilih, sekaligus memperlihatkan kategori mana yang lebih dominan. 
             Dengan demikian, tren distribusi produk lokal dapat dipantau secara lebih terarah.
             """
@@ -400,7 +402,43 @@ with tab[0]:
 # TAB 2: Sebaran Lokasi
 with tab[1]:
     st.subheader("🗺️ Sebaran Lokasi Penjual Produk Lokal")
-    st.markdown("Peta ini menunjukkan konsentrasi penjual produk lokal di setiap provinsi.")
+
+    # Hitung jumlah penjual produk lokal per provinsi
+    count = (
+        df[df["ASAL BRAND"] == "ID"]
+        .groupby("PROVINCE").size()
+        .reset_index(name="count")
+    )
+
+    if not count.empty:
+        # Provinsi dengan penjual terbanyak
+        top_prov = count.sort_values("count", ascending=False).iloc[0]
+        top_prov_name = top_prov["PROVINCE"]
+        top_prov_count = int(top_prov["count"])
+
+        # Kategori teratas di provinsi tersebut
+        kategori_count = (
+            df[(df["ASAL BRAND"] == "ID") & (df["PROVINCE"] == top_prov_name)]
+            .groupby("Kategori").size().reset_index(name="Jumlah Produk")
+            .sort_values("Jumlah Produk", ascending=False)
+        )
+
+        if not kategori_count.empty:
+            top_kat_name = kategori_count.iloc[0]["Kategori"]
+            top_kat_count = int(kategori_count.iloc[0]["Jumlah Produk"])
+        else:
+            top_kat_name, top_kat_count = "-", 0
+
+        st.markdown(
+            f"""
+            Peta ini menunjukkan konsentrasi penjual produk lokal di setiap provinsi. 
+            Provinsi dengan jumlah penjual terbanyak adalah **{top_prov_name}** dengan sekitar **{top_prov_count} penjual**. 
+            Di provinsi tersebut, kategori produk yang paling banyak dijual adalah **{top_kat_name}** dengan **{top_kat_count} produk**.
+            """
+        )
+    else:
+        st.markdown("Belum ada data penjual produk lokal yang dapat ditampilkan.")
+
     map_choropleth(df)
 
 # TAB 3: Analisis Harga
@@ -428,15 +466,31 @@ with tab[2]:
         ]
         selected_kategori = st.selectbox('Pilih Kategori', kategori_list)
 
-        # Hitung rata-rata harga lokal vs impor
-        mean_lokal = df[df["ASAL BRAND"] == "ID"]["PRICE"].mean()
-        mean_impor = df[df["ASAL BRAND"] != "ID"]["PRICE"].mean()
+        # Hitung rata-rata harga lokal vs impor sesuai kategori terpilih
+        if selected_kategori == "Semua Kategori":
+            df_filtered = df.copy()
+        else:
+            df_filtered = df[df["Kategori"] == selected_kategori]
 
-        if mean_lokal < mean_impor:
+        mean_lokal = gmean(df_filtered[df_filtered["ASAL BRAND"] == "ID"]["PRICE"]) \
+            if not df_filtered[df_filtered["ASAL BRAND"] == "ID"].empty else 0
+        mean_impor = gmean(df_filtered[df_filtered["ASAL BRAND"] != "ID"]["PRICE"]) \
+            if not df_filtered[df_filtered["ASAL BRAND"] != "ID"].empty else 0
+
+        # Format angka jadi Rupiah
+        locale.setlocale(locale.LC_ALL, 'id_ID.UTF-8')
+
+        def fmt_rupiah(val):
+            return locale.currency(val, grouping=True).replace(",00", "") if val else "–"
+
+        mean_lokal_fmt = fmt_rupiah(mean_lokal)
+        mean_impor_fmt = fmt_rupiah(mean_impor)
+
+        if mean_lokal < mean_impor and mean_lokal > 0:
             insight = (
                 "Produk impor umumnya berada pada kisaran harga yang lebih tinggi, sementara produk lokal cenderung lebih terjangkau."
             )
-        elif mean_lokal > mean_impor:
+        elif mean_lokal > mean_impor and mean_impor > 0:
             insight = (
                 "Produk lokal justru memiliki rata-rata harga lebih tinggi dibandingkan produk impor, menunjukkan adanya segmen premium pada produk dalam negeri."
             )
@@ -445,12 +499,17 @@ with tab[2]:
                 "Harga produk lokal dan impor relatif seimbang, menunjukkan persaingan yang cukup setara di pasar e-commerce."
             )
 
+        # Narasi dengan angka
         st.markdown(
             f"""
-            Distribusi harga produk lokal dan impor menunjukkan adanya perbedaan pola di pasar. 
-            {insight}
+            Distribusi harga produk lokal dan impor menunjukkan adanya perbedaan pola di pasar.  
+            {insight}  
 
-            Informasi ini memberi gambaran bagaimana kedua jenis produk menempati segmen harga dan bagaimana konsumen dapat mempertimbangkan pilihan sesuai kebutuhan.
+            Pada kategori **{selected_kategori}**, rata-rata harga produk **lokal** adalah sekitar **{mean_lokal_fmt}**, 
+            sedangkan produk **impor** memiliki rata-rata harga sekitar **{mean_impor_fmt}**.  
+
+            Informasi ini memberi gambaran bagaimana kedua jenis produk menempati segmen harga 
+            dan bagaimana konsumen dapat mempertimbangkan pilihan sesuai kebutuhan.
             """
         )
 
