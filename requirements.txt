@@ -4,3 +4,6 @@ geopandas
 plotly
 altair
 openpyxl
+scipy.stats
+gmean
+locale
