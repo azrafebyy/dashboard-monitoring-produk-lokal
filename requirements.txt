@@ -6,3 +6,4 @@ plotly
 altair
 openpyxl
 os
+locale
