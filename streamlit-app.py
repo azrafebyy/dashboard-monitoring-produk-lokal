@@ -1,10 +1,10 @@
 # ---- Import Libraries ----
 import streamlit as st
 import pandas as pd
+import numpy as np
 import geopandas as gpd
 import plotly.express as px
 import altair as alt
-from scipy.stats import gmean
 import locale
 
 # ---- Page configuration ----
@@ -78,6 +78,13 @@ df = df.dropna()
 df.drop_duplicates()
 
 df = df[df['ASAL BRAND'] != '-']
+
+def gmean(values):
+    arr = np.array(values)
+    arr = arr[arr > 0] 
+    if len(arr) == 0:
+        return 0
+    return float(np.exp(np.mean(np.log(arr))))
 
 # ---- Plots ----
 
