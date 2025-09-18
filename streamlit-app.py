@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 import plotly.express as px
+import plotly.graph_objects as go
 import altair as alt
 from babel.numbers import format_currency
 
@@ -79,12 +80,17 @@ df.drop_duplicates()
 
 df = df[df['ASAL BRAND'] != '-']
 
+# ---- Menghitung Rata-rata Geometrik ----
 def gmean(values):
     arr = np.array(values)
     arr = arr[arr > 0] 
     if len(arr) == 0:
         return 0
     return float(np.exp(np.mean(np.log(arr))))
+
+# ---- Format angka jadi Rupiah ----
+def fmt_rupiah(val):
+    return format_currency(val, "IDR", locale="id_ID") if val else "–"
 
 # ---- Plots ----
 
@@ -275,7 +281,7 @@ def grouped_bar_chart(df):
         )
         .properties(
             width=700,
-            height=500
+            height=450
         )
     )
 
@@ -309,7 +315,11 @@ def boxplot(df, kategori):
         yaxis_title='Harga Produk',
         yaxis_range = [0, q95 * 1.1],
         width=800,
-        height=400
+        height=500
+    )
+
+    fig.update_traces(
+        hovertemplate="<b>Produk %{x}</b><br>Harga: Rp%{y:,.0f}<extra></extra>"
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -366,11 +376,9 @@ with tab[0]:
 
     col = st.columns((1.5, 2), gap='medium')
     with col[0]:
-        # Filter interaktif
         marketplace_list = ['Semua Platform', 'Blibli', 'Bukalapak', 'OLX']
         selected_marketplace = st.selectbox('Pilih Platform', marketplace_list)
 
-        # Filter dataset
         if selected_marketplace == "Semua Platform":
             df_filtered = df
         else:
@@ -381,15 +389,14 @@ with tab[0]:
 
         persentase_lokal = (jumlah_lokal / total_produk * 100) if total_produk > 0 else 0
 
-        # Metric ringkasan
         st.markdown(
             f"""
-            <div style="font-size:18px; font-weight:400; color:black;">
+            <div style="font-size:18px; font-weight:400;">
                 Produk Lokal di <strong>{selected_marketplace}</strong>
             </div>
             <div style="font-size:36px; font-weight:500;">
                 {persentase_lokal:.1f}%
-                <span style="font-size:18px; color:black;"> ({jumlah_lokal:,} dari {total_produk:,} produk)</span>
+                <span style="font-size:18px;"> ({jumlah_lokal:,} dari {total_produk:,} produk)</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -451,8 +458,47 @@ with tab[1]:
 # TAB 3: Analisis Harga
 with tab[2]:
     st.subheader("💰 Rata-rata Harga Produk Lokal vs Impor Setiap Kategori")
-    st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
+    df_temp = df.copy()
+    df_temp['Produk'] = df_temp['ASAL BRAND'].apply(
+        lambda x: 'Lokal' if x == 'ID' else 'Impor'
+    )
+
+    df_temp = df_temp[df_temp['Produk'].isin(['Lokal', 'Impor'])]
+
+    # Hitung geometric mean per kategori & produk
+    grouped_price = (
+        df_temp.groupby(['Kategori', 'Produk'])['PRICE']
+        .agg(gmean)
+        .reset_index()
+        .rename(columns={'PRICE': 'Mean Price'})
+    )
+
+    max_row = grouped_price.loc[grouped_price['Mean Price'].idxmax()]
+    min_row = grouped_price.loc[grouped_price['Mean Price'].idxmin()]
+
+    mean_max_fmt = fmt_rupiah(max_row['Mean Price'])
+    mean_min_fmt = fmt_rupiah(min_row['Mean Price'])
+
+    mean_lokal = gmean(df[df["ASAL BRAND"] == "ID"]["PRICE"])
+    mean_impor = gmean(df[df["ASAL BRAND"] != "ID"]["PRICE"])
+
+    mean_lokal_fmt = fmt_rupiah(mean_lokal)
+    mean_impor_fmt = fmt_rupiah(mean_impor)
+
+    st.markdown(
+        f"""
+        Visualisasi berikut menampilkan rata-rata geometrik harga produk lokal dan impor pada setiap kategori. 
+        Rata-rata harga tertinggi ditemukan pada produk **{max_row['Produk']}** di kategori **{max_row['Kategori']}** dengan nilai sebesar **{mean_max_fmt}**. 
+        Sementara itu, rata-rata harga terendah terdapat pada produk **{min_row['Produk']}** di kategori **{min_row['Kategori']}** dengan nilai sebesar **{mean_min_fmt}**.
+        
+        Jika dilihat secara keseluruhan pada semua kategori, rata-rata harga produk **lokal** berada di kisaran **{mean_lokal_fmt}**, 
+        sedangkan produk **impor** memiliki rata-rata harga sekitar **{mean_impor_fmt}**. 
+        Hal ini memberi gambaran bagaimana kedua jenis produk menempati segmen harga yang berbeda dalam pasar e-commerce.
+        """
+    )
+
+    st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
     grouped_bar_chart(df)
 
     st.subheader("💳 Distribusi Harga Produk Lokal vs Impor")
@@ -484,10 +530,6 @@ with tab[2]:
         mean_impor = gmean(df_filtered[df_filtered["ASAL BRAND"] != "ID"]["PRICE"]) \
             if not df_filtered[df_filtered["ASAL BRAND"] != "ID"].empty else 0
 
-        # Format angka jadi Rupiah
-        def fmt_rupiah(val):
-            return format_currency(val, "IDR", locale="id_ID") if val else "–"
-
         mean_lokal_fmt = fmt_rupiah(mean_lokal)
         mean_impor_fmt = fmt_rupiah(mean_impor)
 
@@ -504,17 +546,18 @@ with tab[2]:
                 "Harga produk lokal dan impor relatif seimbang, menunjukkan persaingan yang cukup setara di pasar e-commerce."
             )
 
-        # Narasi dengan angka
         st.markdown(
             f"""
-            Distribusi harga produk lokal dan impor menunjukkan adanya perbedaan pola di pasar.  
-            {insight}  
+            Boxplot ini membantu melihat pola harga lebih jelas. 
+            Garis tengah kotak menunjukkan titik tengah harga, kotak memperlihatkan kisaran harga utama, 
+            sedangkan garis di luar kotak menunjukkan rentang harga normal. 
+            Titik yang terpisah menandakan produk dengan harga yang jauh lebih tinggi atau lebih rendah dari kebanyakan.
 
-            Pada kategori **{selected_kategori}**, rata-rata harga produk **lokal** adalah sekitar **{mean_lokal_fmt}**, 
-            sedangkan produk **impor** memiliki rata-rata harga sekitar **{mean_impor_fmt}**.  
+            Pada kategori **{selected_kategori}**, rata-rata harga produk **lokal** sekitar **{mean_lokal_fmt}**, 
+            sedangkan produk **impor** sekitar **{mean_impor_fmt}**. {insight}
 
-            Informasi ini memberi gambaran bagaimana kedua jenis produk menempati segmen harga 
-            dan bagaimana konsumen dapat mempertimbangkan pilihan sesuai kebutuhan.
+            Dengan cara ini, kita bisa melihat apakah harga produk lokal cenderung lebih rapat atau lebih menyebar dibanding impor, 
+            dan bagaimana posisi harga keduanya di pasar.
             """
         )
 
