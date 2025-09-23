@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 import plotly.express as px
-import plotly.graph_objects as go
 import altair as alt
 from babel.numbers import format_currency
 
@@ -332,8 +331,11 @@ with st.sidebar:
     Dashboard ini dirancang untuk memantau tren, distribusi, dan perbandingan produk lokal dengan produk impor sebagai dasar pertimbangan kebijakan strategis.
     """)
 
-    color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-    selected_color_theme = st.selectbox('Pilih tema warna', color_theme_list)
+    with st.expander('Disclaimer', expanded=True):
+        st.write('''
+            - Data yang digunakan pada dashboard ini berasal dari :orange[**satu periode waktu tertentu**] sehingga hasil analisis tidak merepresentasikan kondisi keseluruhan atau tren jangka panjang.
+            - Dashboard ini dibuat sebagai bagian dari :orange[**proyek Kerja Praktik**], sehingga fokus utamanya adalah pada implementasi teknis dan penyajian data, bukan sebagai analisis komprehensif.
+        ''')
 
 # ---- Main Content ----
 st.markdown(
@@ -349,11 +351,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-tab = st.tabs(["Dominasi Produk", "Sebaran Lokasi", "Analisis Harga"])
+tab = st.tabs(["Proporsi Produk", "Sebaran Lokasi", "Analisis Harga"])
 
-# TAB 1: Dominasi Produk
+# TAB 1: Proporsi Produk
 with tab[0]:
-    st.subheader("📦 Dominasi Produk Lokal vs Impor")
+    st.subheader("📦 Proporsi Produk Lokal vs Impor")
     st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
     col = st.columns((1.2, 2), gap='medium')
@@ -442,6 +444,9 @@ with tab[1]:
             top_kat_count = int(kategori_count.iloc[0]["Jumlah Produk"])
         else:
             top_kat_name, top_kat_count = "-", 0
+        
+        color_theme_list = ['blues', 'greens', 'reds']
+        selected_color_theme = st.selectbox('Pilih tema warna', color_theme_list)
 
         st.markdown(
             f"""
